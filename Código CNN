@@ -1,0 +1,124 @@
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.preprocessing import image
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Parámetros
+image_size = (128, 128)
+batch_size = 32
+train_dir = 'C:\\Users\\jmora\\OneDrive\\Escritorio\\CNN_CLASS\\afhq\\train'
+val_dir = 'C:\\Users\\jmora\\OneDrive\\Escritorio\\CNN_CLASS\\afhq\\val'
+
+# Generadores de datos con aumento de datos para el entrenamiento
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=20,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    fill_mode='nearest'
+)
+
+val_datagen = ImageDataGenerator(rescale=1./255)
+
+train_generator = train_datagen.flow_from_directory(
+    train_dir, 
+    target_size=image_size, 
+    batch_size=batch_size, 
+    class_mode='categorical')
+
+validation_generator = val_datagen.flow_from_directory(
+    val_dir, 
+    target_size=image_size, 
+    batch_size=batch_size, 
+    class_mode='categorical')
+
+# Construcción del modelo CNN con capas Batch Normalization
+model = Sequential([
+    Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 3)),
+    BatchNormalization(),
+    MaxPooling2D(2, 2),
+    Conv2D(64, (3, 3), activation='relu'),
+    BatchNormalization(),
+    MaxPooling2D(2, 2),
+    Conv2D(128, (3, 3), activation='relu'),
+    BatchNormalization(),
+    MaxPooling2D(2, 2),
+    Flatten(),
+    Dense(256, activation='relu'),
+    Dropout(0.5),
+    Dense(3, activation='softmax')
+])
+
+# Compilación del modelo
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Entrenamiento del modelo
+history = model.fit(
+    train_generator, 
+    steps_per_epoch=train_generator.samples // batch_size, 
+    epochs=20,  # Incrementar el número de épocas
+    validation_data=validation_generator, 
+    validation_steps=validation_generator.samples // batch_size)
+
+# Guardar el modelo
+model.save('mi_modelo_entrenado.h5')
+
+# Gráficas de exactitud
+plt.figure(figsize=(12, 4))
+plt.subplot(1, 2, 1)
+plt.plot(history.history['accuracy'], label='Exactitud en entrenamiento')
+plt.plot(history.history['val_accuracy'], label='Exactitud en validación')
+plt.title('Exactitud durante el entrenamiento')
+plt.legend()
+
+plt.subplot(1, 2, 2)
+plt.plot(history.history['loss'], label='Pérdida en entrenamiento')
+plt.plot(history.history['val_loss'], label='Pérdida en validación')
+plt.title('Pérdida durante el entrenamiento')
+plt.legend()
+
+plt.show()
+
+# Función para cargar y preparar una imagen individual
+def load_and_prepare_image(file_path):
+    img = image.load_img(file_path, target_size=image_size)
+    img = image.img_to_array(img)
+    img = np.expand_dims(img, axis=0)
+    img /= 255.0
+    return img
+
+# Cargar algunas imágenes para prueba
+test_image_paths = [
+    "C:\\Users\\jmora\\OneDrive\\Escritorio\\CNN_CLASS\\afhq\\test\\prueba1.jpeg",
+    "C:\\Users\\jmora\\OneDrive\\Escritorio\\CNN_CLASS\\afhq\\test\\prueba2.jpeg",
+    "C:\\Users\\jmora\\OneDrive\\Escritorio\\CNN_CLASS\\afhq\\test\\prueba3.jpg",
+    "C:\\Users\\jmora\\OneDrive\\Escritorio\\CNN_CLASS\\afhq\\test\\prueba4.jpg",
+    "C:\\Users\\jmora\\OneDrive\\Escritorio\\CNN_CLASS\\afhq\\test\\prueba5.jpg",
+    "C:\\Users\\jmora\\OneDrive\\Escritorio\\CNN_CLASS\\afhq\\test\\prueba6.jpg"
+]
+
+# Predecir y mostrar imágenes con predicciones
+plt.figure(figsize=(10, 10))
+for i, file_path in enumerate(test_image_paths):
+    img = load_and_prepare_image(file_path)
+    prediction = model.predict(img)
+    predicted_class = np.argmax(prediction, axis=1)
+
+    # Obtener el nombre de la clase
+    labels = (train_generator.class_indices)
+    labels = dict((v,k) for k,v in labels.items())
+    predicted_class_label = labels[predicted_class[0]]
+
+    # Mostrar la imagen y la predicción
+    plt.subplot(1, len(test_image_paths), i+1)
+    plt.imshow(image.load_img(file_path))
+    plt.title(f'Predicción: {predicted_class_label}')
+    plt.axis('off')
+
+plt.show()
